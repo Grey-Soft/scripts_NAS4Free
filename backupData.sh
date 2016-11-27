@@ -5,9 +5,11 @@
 # The other filesystem can be either on the local host or on a remote host 
 #
 # Author: fritz from NAS4Free forum
+# Contributor: Grey from NAS4Free forum. Grey-Soft @ GitHub
 #
-# Usage: backupData.sh [-s user@host[,path2privatekey]] [-b maxRollbck] [-c compression[,...]] fsSource[,...] fsDest
+# Usage: backupData.sh [-p sshport] [-s user@host[,path2privatekey]] [-b maxRollbck] [-c compression[,...]] fsSource[,...] fsDest
 #
+#	-p sshport : Specify a remote SSH port before remote host. (Grey-Soft)
 #	-s user@host[,path2privatekey]:	Specify a remote host on which the destination filesystem 
 #			is located
 #			Prerequisite: An ssh server shall be running on the host and
@@ -75,6 +77,7 @@ RUN_FCT_SSH=""				# This should be put in front of FUNCTIONS that may have to be
 RUN_CMD_SSH=""				# This should be put in front of COMMANDS that may have to be executed remotely
 					# By default (i.e. local backup) "RUN_CMD_SSH" does not have any effect
 I_MAX_ROLLBACK_S=$((10*$S_IN_DAY))	# Default value of max rollback
+I_SSH_PORT="22" # Default SSH port 22
 
 # Set variables corresponding to the input parameters
 ARGUMENTS="$@"
@@ -100,9 +103,9 @@ run_fct_ssh() {
 	
 	# run the code on the remote host
 	if [ -z "$I_PATH_KEY" ]; then
-		$BIN_SSH -oBatchMode=$SSH_BATCHMODE -t $I_REMOTE_LOGIN "/bin/sh" < $TMP_FILE
+		$BIN_SSH -p $I_SSH_PORT -oBatchMode=$SSH_BATCHMODE -t $I_REMOTE_LOGIN "/bin/sh" < $TMP_FILE
 	else
-		$BIN_SSH -i "$I_PATH_KEY" -oBatchMode=$SSH_BATCHMODE -t $I_REMOTE_LOGIN "/bin/sh" < $TMP_FILE
+		$BIN_SSH -p $I_SSH_PORT -i "$I_PATH_KEY" -oBatchMode=$SSH_BATCHMODE -t $I_REMOTE_LOGIN "/bin/sh" < $TMP_FILE
 	fi
 	return_code="$?"
 	
@@ -126,8 +129,14 @@ parseInputParams() {
 	
 	# parse the optional parameters
 	# (there should be none)
-	while getopts ":s:b:c:" opt; do
+	while getopts ":p:s:b:c:" opt; do
         	case $opt in
+			p)	if [ "$OPTARG" -gt 0 ] && [ "$OPTARG" -le 65536 ] ; then
+					I_SSH_PORT=$OPTARG
+				else
+					echo "Wrong port number \"$OPTARG\", should be a positive integer <=65536 !"
+					return 1
+				fi ;;
 			s)	echo "$OPTARG" | grep -E "^(.+)@(.+)$" >/dev/null 
 				if [ "$?" -eq "0" ] ; then
 					I_REMOTE_ACTIVE="1"
@@ -138,9 +147,9 @@ parseInputParams() {
 					# some parts of the script
 					RUN_FCT_SSH="run_fct_ssh"
 					if [ -z "$I_PATH_KEY" ]; then
-						RUN_CMD_SSH="$BIN_SSH -oBatchMode=$SSH_BATCHMODE $I_REMOTE_LOGIN"
+						RUN_CMD_SSH="$BIN_SSH -p $I_SSH_PORT -oBatchMode=$SSH_BATCHMODE $I_REMOTE_LOGIN"
 					else				
-						RUN_CMD_SSH="$BIN_SSH -i $I_PATH_KEY -oBatchMode=$SSH_BATCHMODE $I_REMOTE_LOGIN"				
+						RUN_CMD_SSH="$BIN_SSH -p $I_SSH_PORT -i $I_PATH_KEY -oBatchMode=$SSH_BATCHMODE $I_REMOTE_LOGIN"				
 					fi
 					
 					# testing ssh connection
@@ -228,7 +237,7 @@ parseInputParams() {
 		fs_num=`echo "$I_SRC_FSS" | tr " " "\n" | wc -l`
 		
 		# if the number of compression algorithm defined is neither 1
-		# nor equal to the number number of source fs that were defined
+		# nor equal to the number of source fs that were defined
 		if [ $comp_num -ne 1 -a $comp_num -ne $fs_num ]; then
 			echo "Bad compression definition, the number of compression algorithm should either equal 1 or should be equal to the number of source filesystems"
 			return 1
@@ -316,7 +325,7 @@ backup() {
 
 	# If there is no snapshot on dest fs, backup the oldest snapshot on the src fs
 	if [ -z "$newestSnapDestFs" ]; then
-		log_info "$LOGFILE" "$logPrefix: No snapfound found in destination filesystem"
+		log_info "$LOGFILE" "$logPrefix: No snapshot found in destination filesystem"
 
 		if [ -z "$oldestSnapSrcFs" ]; then
 			log_info "$LOGFILE" "$logPrefix: No snapshot to be backed up found in source filesystem"
@@ -435,15 +444,12 @@ main() {
 	return $returnCode
 }
 
-
-
+log_info "$LOGFILE" "-------------------------------------"
 # Parse and validate the input parameters
 if ! parseInputParams $ARGUMENTS > "$TMPFILE_ARGS"; then
-	log_info "$LOGFILE" "-------------------------------------"
 	cat "$TMPFILE_ARGS" | log_error "$LOGFILE"
 	get_log_entries_ts "$LOGFILE" "$START_TIMESTAMP" | sendMail "$SCRIPT_NAME : Invalid arguments"
 else
-	log_info "$LOGFILE" "-------------------------------------"
 	cat "$TMPFILE_ARGS" | log_info "$LOGFILE"
 
 	# run script if possible (lock not existing)
