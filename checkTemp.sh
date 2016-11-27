@@ -112,8 +112,11 @@ main() {
 		devSerNum=`$BIN_SMARTCTL -a /dev/$hdd | grep "^Serial Number:" | sed 's/^Serial Number:[ \t]*\(.*\)[ \t]*$/\1/g'`
 		devName=`$BIN_SMARTCTL -a /dev/$hdd | grep "^Device Model:" | sed 's/^Device Model:[ \t]*\(.*\)[ \t]*$/\1/g'`
 		
-		printf '%+8d %-6s %-25s %s\n' "$((devTemp))" "$hdd" "$devName" "$devSerNum" \
-			| log_info "$LOGFILE"
+		# Log temperature greater when 0°C
+		if [ "$((devTemp))" -gt 0 ] ; then
+			printf '%+8d %-6s %-25s %s\n' "$((devTemp))" "$hdd" "$devName" "$devSerNum" \
+				| log_info "$LOGFILE"
+		fi
 			
 		if [ "$((devTemp))" -ge "$I_WARN_THRESHOLD_HDD" ] ; then
 			log_warning "$LOGFILE" "HDD notification threshold reached !"
