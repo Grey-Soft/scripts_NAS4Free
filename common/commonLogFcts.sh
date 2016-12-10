@@ -219,7 +219,7 @@ get_log_entries_ts() {
 
 	# if the file does not contain at least 1 line
 	if [ "$nbLinesInFile" -lt "1" ]; then
-		echo "No data available in the log file"
+		echo "No data available in the log file \"`basename $f`\""
 		return 2	
 	fi
 	
@@ -240,7 +240,7 @@ get_log_entries_ts() {
  		currentTimestamp1970=`$BIN_DATE -j -f "$tsFormat" "$timestamp" +"%s" 2>/dev/null`
 
 		if [ "$?" -ne "0" ]; then
-			echo "Bad timestamp format ($timestamp) in log file. Skipping file"
+			echo "Bad timestamp format ($timestamp) in log file \"`basename $f`\". Skipping file"
 			return 1
 		fi
 
@@ -281,7 +281,7 @@ get_log_entries_ts() {
 		tail -$(($nbLinesInFile-$lastLine+1)) "$f"
 	# Even the last line in the log is too old
 	else
-		echo "The data available in the log file are too old"
+		echo "The data available in the log file \"`basename $f`\" are too old"
 		return 2
 	fi
 
